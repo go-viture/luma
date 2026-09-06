@@ -14,7 +14,22 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with: { go-version: stable }
-      - run: gofmt -l . | tee /dev/stderr | (! read)
+      # ⛔ SHOW THE FILES. The first form here was
+      # `gofmt -l . | tee /dev/stderr | (! read)`, which failed on the runner
+      # while printing NOTHING -- so the log said a format check failed and
+      # not what was wrong with which file. A check whose failure is unreadable
+      # is a check somebody disables.
+      - name: gofmt
+        shell: bash
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "::error::these files are not gofmt-clean:"
+            echo "$out"
+            gofmt -d $out
+            exit 1
+          fi
+          echo "gofmt clean"
       - run: go vet ./...
       - run: CGO_ENABLED=0 go build ./...
       - run: CGO_ENABLED=0 go test -count=1 -coverprofile=cover.out ./...
