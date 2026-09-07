@@ -37,7 +37,7 @@ func TestLiveVersion(t *testing.T) {
 	}
 	defer func() { _ = g.Close() }()
 
-	v, err := g.Version()
+	v, err := g.ChipVersion()
 	if err != nil {
 		t.Fatalf("Version: %v", err)
 	}

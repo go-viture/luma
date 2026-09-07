@@ -91,13 +91,24 @@ const (
 	CmdVersionB byte = 0xc3
 )
 
-// Version asks for [CmdVersionA] and returns the bytes it answered.
+// ChipVersion is the version of the CHIP's firmware, and not the product's.
 //
-// ⚠ THE BYTES, NOT A VERSION. "02 01 09" reads as 2.1.9 and that is a guess
-// about presentation, not a measurement: nothing has confirmed the field order
-// or that all three are version numbers. A caller that wants to print it can;
-// this will not pretend on its behalf.
-func (g *Glasses) Version() ([]byte, error) {
+// ⛔⛔ IT WAS CALLED Version, AND THAT WAS WRONG. It answers "02 01 09" on a
+// headset whose own updater reads 0.01.101_20260605, and an earlier note took
+// those three bytes for "firmware 2.1.9". The vendor's library settles it:
+// carina_a1088_get_firmware_version SENDS NOTHING -- it hands back a cached
+// string filled by a routine that picks between two getters on a model field,
+// and the getter this headset reaches NAMES ITSELF in its own log strings,
+// "getchipfwver" and "get chip fw ver data status". So 0x80 is a correct read
+// of the chip's firmware; only the label was false.
+//
+// ⚠ AND THE BYTES ARE STILL JUST BYTES. Nothing confirms that "02 01 09" is to
+// be shown as 2.1.9. A caller that wants to print it can; this will not pretend
+// on its behalf.
+//
+// For the version a person recognises, and the serial the vendor prints on its
+// own screen, see [Glasses.Info].
+func (g *Glasses) ChipVersion() ([]byte, error) {
 	r, err := g.Ask(CmdVersionA, nil)
 	if err != nil {
 		return nil, err
