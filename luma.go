@@ -91,16 +91,43 @@ const (
 	CmdVersionB byte = 0xc3
 )
 
-// Version asks for [CmdVersionA] and returns the bytes it answered.
+// ChipVersion is the version of the CHIP's firmware, and not the product's.
 //
-// ⚠ THE BYTES, NOT A VERSION. "02 01 09" reads as 2.1.9 and that is a guess
-// about presentation, not a measurement: nothing has confirmed the field order
-// or that all three are version numbers. A caller that wants to print it can;
-// this will not pretend on its behalf.
-func (g *Glasses) Version() ([]byte, error) {
+// ⛔⛔ IT WAS CALLED Version, AND THAT WAS WRONG. It answers "02 01 09" on a
+// headset whose own updater reads 0.01.101_20260605, and an earlier note took
+// those three bytes for "firmware 2.1.9". The vendor's library settles it:
+// carina_a1088_get_firmware_version SENDS NOTHING -- it hands back a cached
+// string filled by a routine that picks between two getters on a model field,
+// and the getter this headset reaches NAMES ITSELF in its own log strings,
+// "getchipfwver" and "get chip fw ver data status". So 0x80 is a correct read
+// of the chip's firmware; only the label was false.
+//
+// ⚠ AND THE BYTES ARE STILL JUST BYTES. Nothing confirms that "02 01 09" is to
+// be shown as 2.1.9. A caller that wants to print it can; this will not pretend
+// on its behalf.
+//
+// For the version a person recognises, and the serial the vendor prints on its
+// own screen, see [Glasses.Info].
+func (g *Glasses) ChipVersion() ([]byte, error) {
 	r, err := g.Ask(CmdVersionA, nil)
 	if err != nil {
 		return nil, err
 	}
 	return r.Rest, nil
+}
+
+// platform is the seam the portable model is tested against.
+//
+// ⛔ IT LIVES HERE, ONCE. It used to be declared separately in each transport
+// file, and adding a method to one of them built on that platform and broke
+// every other -- six red checks for a seam that only ever had one meaning.
+type platform interface {
+	drain(times int, each time.Duration)
+	write(b []byte, timeout time.Duration) error
+	read(timeout time.Duration) ([]byte, error)
+	// exchange sends one packet on the DATA endpoints and reads the answer.
+	// Separate from write/read because it is a different pair of pipes: the
+	// MCU pair is reserved for flashing.
+	exchange(b []byte, timeout time.Duration) ([]byte, error)
+	close() error
 }

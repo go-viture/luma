@@ -13,14 +13,6 @@ import (
 	"github.com/go-macos/iokit/usb"
 )
 
-// platform is the seam the portable model is tested against.
-type platform interface {
-	drain(times int, each time.Duration)
-	write(b []byte, timeout time.Duration) error
-	read(timeout time.Duration) ([]byte, error)
-	close() error
-}
-
 // pipes is the real one: an open interface and its two pipe references.
 //
 // ⛔ THE REFS ARE NOT THE ADDRESSES. IOKit numbers an interface's pipes 1..n
@@ -28,9 +20,11 @@ type platform interface {
 // addresses. On this headset ep 0x04 is pipe 4 and ep 0x85 is pipe 5, which
 // looks like a coincidence worth not relying on -- so they are looked up.
 type pipes struct {
-	h        *usb.InterfaceHandle
-	out, in  uint8
-	inBuffer int
+	h       *usb.InterfaceHandle
+	out, in uint8
+	// dataOut/dataIn are the pair the version and serial travel on.
+	dataOut, dataIn uint8
+	inBuffer        int
 }
 
 func open() (*Glasses, error) {
@@ -59,6 +53,10 @@ func open() (*Glasses, error) {
 			p.out = one.Ref
 		case EndpointIn:
 			p.in = one.Ref
+		case DataEndpointOut:
+			p.dataOut = one.Ref
+		case DataEndpointIn:
+			p.dataIn = one.Ref
 			if int(one.MaxPacket) > p.inBuffer {
 				p.inBuffer = int(one.MaxPacket)
 			}
@@ -99,3 +97,24 @@ func (p *pipes) read(timeout time.Duration) ([]byte, error) {
 }
 
 func (p *pipes) close() error { return p.h.Close() }
+
+// exchange is one round trip on the data envelope.
+//
+// ⛔ IT REFUSES RATHER THAN FALL BACK TO THE MCU PAIR. A headset without these
+// endpoints is one this cannot ask, and sending a data frame down the flashing
+// channel is not a thing to try on somebody's glasses.
+func (p *pipes) exchange(b []byte, timeout time.Duration) ([]byte, error) {
+	if p.dataOut == 0 || p.dataIn == 0 {
+		return nil, fmt.Errorf("%w: it has no endpoint %#02x and %#02x",
+			ErrNoDevice, DataEndpointOut, DataEndpointIn)
+	}
+	if _, err := p.h.Write(p.dataOut, b, timeout); err != nil {
+		return nil, fmt.Errorf("luma: asking the headset: %w", err)
+	}
+	buf := make([]byte, dataPacket)
+	n, err := p.h.Read(p.dataIn, buf, timeout)
+	if err != nil {
+		return nil, fmt.Errorf("luma: waiting for its answer: %w", err)
+	}
+	return buf[:n], nil
+}

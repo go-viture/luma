@@ -6,6 +6,7 @@ package luma
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -81,10 +82,10 @@ func TestAskDrainsBeforeEveryCommand(t *testing.T) {
 // ⚠ "02 01 09" READS AS 2.1.9 AND THAT IS A GUESS about presentation, not a
 // measurement: nothing has confirmed the field order, or that all three are
 // version numbers. The package hands back the bytes.
-func TestVersionHandsBackTheBytesAndNotAStory(t *testing.T) {
+func TestChipVersionIsTheChipsAndSaysSo(t *testing.T) {
 	f := &fake{answers: [][]byte{{0xfa, 0x55, 0x80, 0, 0, 2, 1, 9}}}
 	g := &Glasses{p: f}
-	got, err := g.Version()
+	got, err := g.ChipVersion()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestEveryWayAnExchangeCanFail(t *testing.T) {
 	if err := none.Close(); err != nil {
 		t.Errorf("closing nothing = %v", err)
 	}
-	if _, err := none.Version(); !errors.Is(err, ErrNoDevice) {
+	if _, err := none.ChipVersion(); !errors.Is(err, ErrNoDevice) {
 		t.Errorf("no device version = %v", err)
 	}
 
@@ -147,3 +148,24 @@ func TestOpenReportsWhatThePlatformSaid(t *testing.T) {
 		t.Errorf("Open() = %v, %v", got, err)
 	}
 }
+
+// exchange is the data envelope's seam. The MCU pair and the data pair are
+// different pipes, so a fake that conflated them would let a test pass while
+// the real code sent a data frame down the flashing channel.
+func (f *fake) exchange(b []byte, _ time.Duration) ([]byte, error) {
+	f.wrote = append(f.wrote, append([]byte(nil), b...))
+	if f.wrErr != nil {
+		return nil, f.wrErr
+	}
+	if f.readErr != nil {
+		return nil, f.readErr
+	}
+	if len(f.answers) == 0 {
+		return nil, errTestExhausted
+	}
+	a := f.answers[0]
+	f.answers = f.answers[1:]
+	return a, nil
+}
+
+var errTestExhausted = fmt.Errorf("fake: nothing left to answer")
