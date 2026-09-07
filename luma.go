@@ -115,3 +115,19 @@ func (g *Glasses) ChipVersion() ([]byte, error) {
 	}
 	return r.Rest, nil
 }
+
+// platform is the seam the portable model is tested against.
+//
+// ⛔ IT LIVES HERE, ONCE. It used to be declared separately in each transport
+// file, and adding a method to one of them built on that platform and broke
+// every other -- six red checks for a seam that only ever had one meaning.
+type platform interface {
+	drain(times int, each time.Duration)
+	write(b []byte, timeout time.Duration) error
+	read(timeout time.Duration) ([]byte, error)
+	// exchange sends one packet on the DATA endpoints and reads the answer.
+	// Separate from write/read because it is a different pair of pipes: the
+	// MCU pair is reserved for flashing.
+	exchange(b []byte, timeout time.Duration) ([]byte, error)
+	close() error
+}

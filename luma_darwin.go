@@ -13,18 +13,6 @@ import (
 	"github.com/go-macos/iokit/usb"
 )
 
-// platform is the seam the portable model is tested against.
-type platform interface {
-	// exchange sends one packet on the DATA endpoints and reads the answer.
-	// Separate from write/read because it is a different pair of pipes: the
-	// MCU pair is reserved for flashing.
-	exchange(b []byte, timeout time.Duration) ([]byte, error)
-	drain(times int, each time.Duration)
-	write(b []byte, timeout time.Duration) error
-	read(timeout time.Duration) ([]byte, error)
-	close() error
-}
-
 // pipes is the real one: an open interface and its two pipe references.
 //
 // ⛔ THE REFS ARE NOT THE ADDRESSES. IOKit numbers an interface's pipes 1..n

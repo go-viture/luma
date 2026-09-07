@@ -6,16 +6,6 @@
 
 package luma
 
-import "time"
-
-// platform is the seam the portable model is tested against.
-type platform interface {
-	drain(times int, each time.Duration)
-	write(b []byte, timeout time.Duration) error
-	read(timeout time.Duration) ([]byte, error)
-	close() error
-}
-
 // open reports [ErrUnsupported].
 //
 // The frame model in this package is portable and tested everywhere; only the
