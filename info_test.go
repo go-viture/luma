@@ -153,3 +153,48 @@ func TestInfoNeverSubstitutesTheChipVersion(t *testing.T) {
 		}
 	})
 }
+
+// The two ways a reply can be well-formed and still carry nothing, and the two
+// ways AskData can fail before a reply exists.
+func TestTheEdgesOfTheDataEnvelope(t *testing.T) {
+	t.Run("a length that overruns the buffer is clamped, not trusted", func(t *testing.T) {
+		// ⛔ A DEVICE'S OWN LENGTH FIELD IS NOT A PROMISE. Believing one that
+		// points past the bytes we hold would read whatever follows in memory.
+		b, _ := hex.DecodeString(replyFirmware)
+		b[4], b[5] = 0xff, 0x00 // pklen 255: far past the 39 bytes there are
+		got, err := ParseData(b, MsgAppFirmwareVersion)
+		if err != nil {
+			t.Fatalf("ParseData: %v", err)
+		}
+		if got != "12.0.01.101_20260605" {
+			t.Errorf("got %q: the payload should stop at the bytes we actually have", got)
+		}
+	})
+
+	t.Run("an empty payload is empty, not an error", func(t *testing.T) {
+		b, _ := hex.DecodeString(replyFirmware)
+		b[4], b[5] = 0x0c, 0x00 // pklen 12: header only
+		got, err := ParseData(b, MsgAppFirmwareVersion)
+		if err != nil {
+			t.Fatalf("ParseData: %v", err)
+		}
+		if got != "" {
+			t.Errorf("got %q, want the empty string", got)
+		}
+	})
+
+	t.Run("no headset", func(t *testing.T) {
+		var none *Glasses
+		if _, err := none.AskData(MsgAppFirmwareVersion); !errors.Is(err, ErrNoDevice) {
+			t.Errorf("AskData on a nil Glasses = %v, want ErrNoDevice", err)
+		}
+	})
+
+	t.Run("the transport refuses", func(t *testing.T) {
+		want := errors.New("the pipe is gone")
+		g := &Glasses{p: &fake{wrErr: want}}
+		if _, err := g.AskData(MsgAppFirmwareVersion); !errors.Is(err, want) {
+			t.Errorf("AskData = %v, want the transport's own error", err)
+		}
+	})
+}
